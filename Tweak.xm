@@ -1,5 +1,6 @@
 #import <objc/runtime.h>
 #import <libkern/OSAtomic.h>
+#import <Foundation/Foundation.h>
 
 @interface PUIProgressWindow : NSObject
 - (void)setProgressValue:(float)arg1;
@@ -76,7 +77,7 @@ int averageObjectCount = pow(10, 7); //assuming this is how many objects SB crea
                 if (currentProgress > local && (((currentProgress % 6) == 0) || currentProgress >= 95)) { //6 seems to be a good interval to prevent screen flashes
 
                     local = currentProgress;
-                    if (port > 0) {
+                    if (CFMessagePortIsValid(port)) {
 
                         int progressPointer = local;
                         NSData *progressMessage = [NSData dataWithBytes:&local length:sizeof(progressPointer)];
@@ -108,7 +109,7 @@ int averageObjectCount = pow(10, 7); //assuming this is how many objects SB crea
                                 OSAtomicIncrement64(&ping);
                             }
 
-                            return originalImp(_self, @selector(init));
+                            return ((id (*)(id, SEL))originalImp)(_self, @selector(init));
                         });
 
                         method_setImplementation(originalMethod, newImp);
@@ -120,12 +121,12 @@ int averageObjectCount = pow(10, 7); //assuming this is how many objects SB crea
 
         IMP originalFinishBlock = class_getMethodImplementation(objc_getClass("SBUIController"), @selector(finishLaunching));
         IMP newFinishBlock = imp_implementationWithBlock(^(id _self, SEL selector) {
-            originalFinishBlock(_self, @selector(finishLaunching));
+            ((void (*)(id, SEL))originalFinishBlock)(_self, @selector(finishLaunching));
             int64_t finalObjectCount = ping;
             ping = -1;
             end = clock();
             time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-            HBLogDebug(@"Springboard launched with %lld -init calls, estimation of %d off by %.2f%%, in %.2f seconds", finalObjectCount, averageObjectCount, (ABS(finalObjectCount - ((float)averageObjectCount / classSkipCount)) / ((finalObjectCount + ((float)averageObjectCount / classSkipCount)) / 2)) * 100, time_spent);
+            NSLog(@"Springboard launched with %lld -init calls, estimation of %d off by %.2f%%, in %.2f seconds", finalObjectCount, averageObjectCount, (ABS(finalObjectCount - ((float)averageObjectCount / classSkipCount)) / ((finalObjectCount + ((float)averageObjectCount / classSkipCount)) / 2)) * 100, time_spent);
 
             if (![storedData valueForKey:@"deviceInits"]) {
                 NSDictionary *newData = @{ @"deviceInits" : @(finalObjectCount) };
